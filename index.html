@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Practical Machine Learning Assignment : Analysis Description of the Activity Performace">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Practical Machine Learning Assignment</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/duxuhao">View on GitHub</a>
+
+          <h1 id="project_title">Practical Machine Learning Assignment</h1>
+          <h2 id="project_tagline">Analysis Description of the Activity Performace</h2>
+
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p>This is the description of the assignment for unit Practical_machine_learning 
+Here is the process I deal with the data</p>
+
+<pre><code>library(caret)
+data &lt;- read.csv("pml-training.csv")
+FilterData &lt;- data[,colSums(is.na(data)) == 0]
+FilterData &lt;- FilterData[,8:dim(FilterData)[2]]
+FilterData &lt;- FilterData[, sapply(FilterData, is.numeric)]
+tmp &lt;- cor(FilterData[1:dim(FilterData)[2]]) #the corelationsip among each variables
+remove &lt;- findCorrelation(tmp, cutoff = 0.80, verbose = TRUE) #delete the column with high correlation
+FilterData &lt;- FilterData[,-remove]
+FilterData[["class"]] &lt;- data$class #put back the target column as it was deleted by the non-digit delete action
+</code></pre>
+
+<p>Here, I read the training data and preprocess the data frame with the following step:
+1. Remove the column with too many NaN value, since there are too many invalid value in it;
+2. Delete the column with non-digit value, which cannot be used for predicting as the value is non-digit;
+3. Delete the first few column as they are label of time the user;
+4. Put the class column back to the data frame.</p>
+
+<pre><code>set.seed(1992912)
+inTrain &lt;- createDataPartition(y=FilterData$class,p=0.7,list=FALSE)
+
+Training &lt;- FilterData[inTrain,]
+Testing &lt;- FilterData[-inTrain,]
+</code></pre>
+
+<p>And then, I put 70% of data into the training set and 30% into the test set</p>
+
+<pre><code>PredictionMethod &lt;-c("gbm","treebag","nb","rpart")
+n = 1
+Accuracy &lt;- c(0,0,0,0)
+for (pm in PredictionMethod[1:2]) {
+
+mod &lt;- train(class ~ ., method=pm,data=Training)
+pre &lt;- predict(mod,newdata=Testing)
+print(pm) #print out the method name in order to better view the result
+Imp &lt;- varImp(mod,scale = FALSE)
+print(Imp) #print out the importance of different variables
+print(confusionMatrix(pre,Testing$class))
+performance &lt;- confusionMatrix(pre,Testing$class)
+Accuracy[n] &lt;- performance$overall[1]
+if (n &gt; 1) {
+    if (Accuracy[n] &gt; Accuracy[n-1]) {
+        UsedMod &lt;- mod # if this method is more accuracy than the last one, pick up this one 
+    }
+} else {
+    UsedMod &lt;- mod
+}
+n &lt;- n + 1
+
+}
+
+testdata &lt;- read.csv("pml-testing.csv")
+
+testpre &lt;- predict(UsedMod,newdata=testdata)
+print(testpre)
+</code></pre>
+
+<p>I choose the first 4 comonly used method for predicting and print out the accuracy of each method. I made a loop
+for training and if the accuracy of this method is higher than the last method, the method will be marked down and
+the method with the highest accuracy will be puck up, which turns out to be the "treebag" method. The accuracies 
+are marked in the Model_Performance_result.txt file the here is the one of the "treebag" method:</p>
+
+<pre><code>          Reference
+Prediction    A    B    C    D    E
+         A 1665   16    0    4    1
+         B    5 1105    7    0    2
+         C    2   16 1000   13    3
+         D    2    2   16  947    6
+         E    0    0    3    0 1070
+</code></pre>
+
+<p>Overall Statistics</p>
+
+<pre><code>           Accuracy : 0.9833          
+             95% CI : (0.9797, 0.9865)
+No Information Rate : 0.2845          
+P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+
+              Kappa : 0.9789          
+ Mcnemar's Test P-Value : 0.009824        
+
+ whose predicted value is 
+</code></pre>
+
+<p>First Prediction</p>
+
+<p>[1] B A B A A E D B A A B C B A E E A B B B
+Levels: A B C D E</p>
+
+<p>And I also use the "random Forest" method to do the classification:</p>
+
+<pre><code>modrf &lt;- train(class ~ ., method='rf',data=Training)
+prerf &lt;- predict(modrf,newdata=Testing)
+print("random forest")
+Imprf &lt;- varImp(modrf, scale = FALSE)
+print(Imprf)
+print(confusionMatrix(prerf,Testing$class))
+testpre &lt;- predict(modrf,newdata=testdata)
+print(testpre)
+</code></pre>
+
+<p>The training result is followed:</p>
+
+<pre><code>          Reference
+Prediction    A    B    C    D    E
+         A 1673   10    0    0    0
+         B    1 1119    5    0    0
+         C    0    9 1011    8    3
+         D    0    0   10  956    4
+         E    0    1    0    0 1075
+</code></pre>
+
+<p>Overall Statistics</p>
+
+<pre><code>           Accuracy : 0.9913          
+             95% CI : (0.9886, 0.9935)
+No Information Rate : 0.2845          
+P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+
+              Kappa : 0.989           
+</code></pre>
+
+<p>Mcnemar's Test P-Value : NA              </p>
+
+<p>the accuracy is a bit higher than the tree bag method (99.1% &gt; 98.3%) and they got the same prediction result from the testing set</p>
+
+<p>[1] B A B A A E D B A A B C B A E E A B B B
+Levels: A B C D E</p>
+
+<p>And the top 20 importance of the variables are:</p>
+
+<p><img src="https://raw.githubusercontent.com/duxuhao/Practical_Machine_Learning/master/Importance.png" alt=""></p>
+
+<p>So here is the result I got from this data set.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
